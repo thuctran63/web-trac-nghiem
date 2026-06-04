@@ -24,7 +24,13 @@ export interface ExplanationResult {
   disclaimer: string
 }
 
-const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions'
+import {
+  type DeepSeekConfig,
+  getChatCompletionsUrl,
+  getDeepSeekConfig,
+} from './deepseekConfig'
+
+export { getDeepSeekConfig, type DeepSeekConfig }
 
 const SYSTEM_PROMPT = `Bạn là trợ lý giáo dục y khoa chuyên ngành Tai Mũi Họng (TMH), hỗ trợ bác sĩ ôn thi trắc nghiệm.
 
@@ -127,30 +133,48 @@ function parseModelJson(content: string): ExplanationResult {
   return result
 }
 
-export async function generateExplanation(
+function buildDeepSeekRequestBody(
   payload: ExplainPayload,
-  apiKey: string,
-): Promise<ExplanationResult> {
-  if (!apiKey) {
-    throw new Error('Chưa cấu hình DEEPSEEK_API_KEY trên server')
+  config: DeepSeekConfig,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: config.model,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: buildUserPrompt(payload) },
+    ],
+    temperature: 0.2,
+    max_tokens: 1800,
+    response_format: { type: 'json_object' },
   }
 
-  const res = await fetch(DEEPSEEK_URL, {
+  if (config.thinkingEnabled) {
+    body.thinking = { type: 'enabled' }
+    body.reasoning_effort = config.reasoningEffort
+  } else {
+    body.thinking = { type: 'disabled' }
+  }
+
+  return body
+}
+
+export async function generateExplanation(
+  payload: ExplainPayload,
+  config: DeepSeekConfig,
+): Promise<ExplanationResult> {
+  if (!config.apiKey) {
+    throw new Error('Chưa cấu hình DEEPSEEK_API_KEY (hoặc API_KEY) trên server')
+  }
+
+  const url = getChatCompletionsUrl(config.baseUrl)
+
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${config.apiKey}`,
     },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildUserPrompt(payload) },
-      ],
-      temperature: 0.2,
-      max_tokens: 1800,
-      response_format: { type: 'json_object' },
-    }),
+    body: JSON.stringify(buildDeepSeekRequestBody(payload, config)),
   })
 
   if (!res.ok) {

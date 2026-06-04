@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { getDeepSeekConfig } from '../lib/deepseekConfig'
 import {
   generateExplanation,
   parseRequestBody,
@@ -23,8 +24,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(405).json({ error: 'Method not allowed' })
     }
 
-    const apiKey = process.env.DEEPSEEK_API_KEY
-    if (!apiKey) {
+    const deepseek = getDeepSeekConfig()
+    if (!deepseek.apiKey) {
       return res.status(503).json({
         error:
           'Chưa cấu hình DEEPSEEK_API_KEY. Thêm biến môi trường trên Vercel (Settings → Environment Variables).',
@@ -33,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const rawBody = parseRequestBody(req.body)
     const payload = validateExplainPayload(rawBody)
-    const result = await generateExplanation(payload, apiKey)
+    const result = await generateExplanation(payload, deepseek)
     return res.status(200).json(result)
   } catch (e) {
     console.error('[api/explain]', e)

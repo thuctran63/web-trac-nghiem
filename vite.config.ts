@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { getDeepSeekConfig } from './lib/deepseekConfig'
 import {
   generateExplanation,
   validateExplainPayload,
@@ -40,14 +41,14 @@ function explainApiDevPlugin(env: Record<string, string>): Plugin {
           return
         }
 
-        const apiKey = env.DEEPSEEK_API_KEY
-        if (!apiKey) {
+        const deepseek = getDeepSeekConfig(env)
+        if (!deepseek.apiKey) {
           respon.statusCode = 503
           respon.setHeader('Content-Type', 'application/json')
           respon.end(
             JSON.stringify({
               error:
-                'Thiếu DEEPSEEK_API_KEY. Tạo file .env.local với DEEPSEEK_API_KEY=sk-...',
+                'Thiếu DEEPSEEK_API_KEY. Tạo file .env.local (xem .env.example).',
             }),
           )
           return
@@ -57,7 +58,7 @@ function explainApiDevPlugin(env: Record<string, string>): Plugin {
           const raw = await readBody(req)
           const body = raw ? JSON.parse(raw) : {}
           const payload = validateExplainPayload(body)
-          const result = await generateExplanation(payload, apiKey)
+          const result = await generateExplanation(payload, deepseek)
           respon.statusCode = 200
           respon.setHeader('Content-Type', 'application/json')
           respon.end(JSON.stringify(result))
