@@ -151,8 +151,6 @@ function buildDeepSeekRequestBody(
   if (config.thinkingEnabled) {
     body.thinking = { type: 'enabled' }
     body.reasoning_effort = config.reasoningEffort
-  } else {
-    body.thinking = { type: 'disabled' }
   }
 
   return body
