@@ -4,6 +4,8 @@ import { getSections, getQuestionsBySection, currentSet } from '../data'
 import { useQuiz } from '../hooks/useQuiz'
 import { OptionButton } from '../components/OptionButton'
 import { ProgressBar } from '../components/ProgressBar'
+import { ExplanationPanel } from '../components/ExplanationPanel'
+import { useExplanation } from '../hooks/useExplanation'
 import { getOptionKeys } from '../utils/quiz'
 
 const ALL_SLUG = 'tat-ca'
@@ -41,6 +43,12 @@ export function Quiz() {
     nextQuestion,
   } = useQuiz(questions, storageKey)
 
+  const selectedAnswer = current
+    ? answers[`${current.section}-${current.questionNumber}`]
+    : undefined
+
+  const explanation = useExplanation(current, selectedAnswer, showResult)
+
   const goToResults = useCallback(() => {
     navigate(`/results/${slug}`, {
       state: { correctCount, total, sectionName },
@@ -57,9 +65,9 @@ export function Quiz() {
   }, [currentIndex])
 
   useEffect(() => {
-    if (!showResult) return
+    if (!showResult || explanation.status === 'loading') return
     nextBtnRef.current?.focus({ preventScroll: true })
-  }, [showResult, currentIndex])
+  }, [showResult, currentIndex, explanation.status])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -104,8 +112,8 @@ export function Quiz() {
   if (!current) return null
 
   const answeredKey = `${current.section}-${current.questionNumber}`
-  const selectedAnswer = answers[answeredKey]
   const optionKeys = getOptionKeys(current)
+  const isUserCorrect = selectedAnswer === current.correctAnswer
 
   return (
     <div className="quiz-page">
@@ -163,6 +171,17 @@ export function Quiz() {
           </p>
         )}
       </div>
+
+      {showResult && selectedAnswer && (
+        <ExplanationPanel
+          status={explanation.status}
+          data={explanation.data}
+          error={explanation.error}
+          fromCache={explanation.fromCache}
+          isUserCorrect={isUserCorrect}
+          onRetry={explanation.retry}
+        />
+      )}
 
       {showResult && (
         <div className="next-wrap">
