@@ -15,7 +15,7 @@ export function OptionButton({ label, text, selected, correct, wrong, disabled, 
   else if (!selected && correct && disabled) className += ' option-reveal'
 
   return (
-    <button className={className} onClick={onSelect} disabled={disabled}>
+    <button type="button" className={className} onClick={onSelect} disabled={disabled}>
       <span className="option-label">{label}</span>
       <span className="option-text">{text}</span>
       {selected && correct && <span className="option-icon">✓</span>}

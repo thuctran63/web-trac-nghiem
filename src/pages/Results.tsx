@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useQuiz } from '../hooks/useQuiz'
 import { getQuestionsBySection, getSections, currentSet } from '../data'
@@ -7,7 +8,11 @@ export function Results() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  const state = location.state as { correctCount: number; total: number; sectionName: string } | null
+  const state = location.state as {
+    correctCount: number
+    total: number
+    sectionName: string
+  } | null
 
   const sectionInfo = getSections().find((s) => s.slug === slug)
   const questions =
@@ -18,14 +23,23 @@ export function Results() {
         : []
 
   const storageKey = `quiz-${slug}`
-  const { reset } = useQuiz(questions, storageKey)
+  const { correctCount, total, answeredCount, reset } = useQuiz(questions, storageKey)
 
-  const correct = state?.correctCount ?? 0
-  const total = state?.total ?? 0
-  const sectionName = state?.sectionName ?? (slug === 'tat-ca' ? 'Tất cả chuyên mục' : sectionInfo?.name ?? '')
-  const pct = total > 0 ? Math.round((correct / total) * 100) : 0
+  const correct = state?.correctCount ?? correctCount
+  const questionTotal = state?.total ?? total
+  const sectionName =
+    state?.sectionName ??
+    (slug === 'tat-ca' ? 'Tất cả chuyên mục' : sectionInfo?.name ?? '')
+  const pct = questionTotal > 0 ? Math.round((correct / questionTotal) * 100) : 0
+  const wrong = questionTotal - correct
 
-  const wrong = total - correct
+  const hasData = answeredCount > 0 || (state != null && state.total > 0)
+
+  useEffect(() => {
+    if (!hasData) {
+      navigate('/sections', { replace: true })
+    }
+  }, [hasData, navigate])
 
   const handleRetry = () => {
     reset()
@@ -36,6 +50,8 @@ export function Results() {
     reset()
     navigate('/sections')
   }
+
+  if (!hasData) return null
 
   let verdict = ''
   let verdictClass = 'results-verdict-mid'
@@ -75,10 +91,10 @@ export function Results() {
         </div>
 
         <div className="results-actions">
-          <button className="btn btn-primary" onClick={handleRetry}>
+          <button type="button" className="btn btn-primary" onClick={handleRetry}>
             Làm lại
           </button>
-          <button className="btn btn-secondary" onClick={handleBack}>
+          <button type="button" className="btn btn-secondary" onClick={handleBack}>
             Chọn chuyên mục khác
           </button>
         </div>

@@ -1,25 +1,32 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useCallback } from 'react'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { getSections, getQuestionsBySection, currentSet } from '../data'
 import { useQuiz } from '../hooks/useQuiz'
 import { OptionButton } from '../components/OptionButton'
 import { ProgressBar } from '../components/ProgressBar'
+import { getOptionKeys } from '../utils/quiz'
+
+const ALL_SLUG = 'tat-ca'
+const LARGE_QUIZ_THRESHOLD = 100
 
 export function Quiz() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
+  const nextBtnRef = useRef<HTMLButtonElement>(null)
 
   const sectionInfo = getSections().find((s) => s.slug === slug)
-  const questions =
-    slug === 'tat-ca'
-      ? currentSet.questions
-      : sectionInfo
-        ? getQuestionsBySection(sectionInfo.name)
-        : []
+  const isAllSections = slug === ALL_SLUG
+  const isValidSlug = isAllSections || sectionInfo != null
 
-  const sectionName =
-    slug === 'tat-ca'
-      ? 'Tất cả chuyên mục'
-      : sectionInfo?.name ?? 'Không tìm thấy'
+  const questions = isAllSections
+    ? currentSet.questions
+    : sectionInfo
+      ? getQuestionsBySection(sectionInfo.name)
+      : []
+
+  const sectionName = isAllSections
+    ? 'Tất cả chuyên mục'
+    : sectionInfo?.name ?? 'Không tìm thấy'
 
   const storageKey = `quiz-${slug}`
   const {
@@ -32,30 +39,82 @@ export function Quiz() {
     finished,
     selectAnswer,
     nextQuestion,
-    reset,
   } = useQuiz(questions, storageKey)
 
-  if (finished) {
-    navigate(`/results/${slug}`, { state: { correctCount, total, sectionName } })
-    return null
-  }
+  const goToResults = useCallback(() => {
+    navigate(`/results/${slug}`, {
+      state: { correctCount, total, sectionName },
+      replace: true,
+    })
+  }, [navigate, slug, correctCount, total, sectionName])
 
-  if (!current || total === 0) {
+  useEffect(() => {
+    if (finished) goToResults()
+  }, [finished, goToResults])
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [currentIndex])
+
+  useEffect(() => {
+    if (!showResult) return
+    nextBtnRef.current?.focus({ preventScroll: true })
+  }, [showResult, currentIndex])
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
+      if (showResult && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault()
+        nextQuestion()
+        return
+      }
+
+      if (showResult || !current) return
+
+      const key = e.key.toUpperCase()
+      const optionKeys = getOptionKeys(current)
+      if (optionKeys.includes(key)) {
+        e.preventDefault()
+        selectAnswer(key)
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [showResult, current, nextQuestion, selectAnswer])
+
+  if (finished) return null
+
+  if (!isValidSlug || total === 0) {
     return (
       <div className="quiz-page">
-        <p>Không tìm thấy câu hỏi cho chuyên mục này.</p>
+        <div className="empty-state">
+          <h2>Không tìm thấy chuyên mục</h2>
+          <p>Đường dẫn không hợp lệ hoặc chuyên mục không có câu hỏi.</p>
+          <Link to="/sections" className="btn btn-primary">
+            Về danh sách chuyên mục
+          </Link>
+        </div>
       </div>
     )
   }
 
+  if (!current) return null
+
   const answeredKey = `${current.section}-${current.questionNumber}`
   const selectedAnswer = answers[answeredKey]
-
-  const isTrueFalse = current.type === 'true_false'
-  const optionKeys = isTrueFalse ? ['A', 'B'] : Object.keys(current.options)
+  const optionKeys = getOptionKeys(current)
 
   return (
     <div className="quiz-page">
+      {isAllSections && total >= LARGE_QUIZ_THRESHOLD && (
+        <p className="quiz-hint" role="status">
+          Bộ đề lớn ({total} câu) — tiến độ được lưu tự động, bạn có thể thoát và quay lại sau.
+        </p>
+      )}
+
       <div className="quiz-header">
         <span className="section-name">{sectionName}</span>
         <ProgressBar current={currentIndex} total={total} />
@@ -73,11 +132,12 @@ export function Quiz() {
 
         <div className="options-list">
           {optionKeys.map((key) => {
-            const text = isTrueFalse
-              ? key === 'A'
-                ? 'Đúng'
-                : 'Sai'
-              : current.options[key]
+            const text =
+              current.type === 'true_false'
+                ? key === 'A'
+                  ? 'Đúng'
+                  : 'Sai'
+                : current.options[key]
 
             const isSelected = selectedAnswer === key
             const isCorrect = key === current.correctAnswer
@@ -96,13 +156,25 @@ export function Quiz() {
             )
           })}
         </div>
+
+        {!showResult && (
+          <p className="quiz-keyboard-hint">
+            Phím {optionKeys.join(', ')} để chọn đáp án
+          </p>
+        )}
       </div>
 
       {showResult && (
         <div className="next-wrap">
-          <button className="btn-next" onClick={nextQuestion}>
+          <button
+            ref={nextBtnRef}
+            type="button"
+            className="btn-next"
+            onClick={nextQuestion}
+          >
             {currentIndex >= total - 1 ? 'Xem kết quả →' : 'Câu tiếp theo →'}
           </button>
+          <p className="quiz-keyboard-hint quiz-keyboard-hint--next">Enter để tiếp tục</p>
         </div>
       )}
     </div>
