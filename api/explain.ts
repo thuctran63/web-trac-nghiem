@@ -12,7 +12,34 @@ QUY TẮC BẮT BUỘC:
 JSON schema:
 {"summary":"","whyCorrect":"","whyOthersWrong":"","noteOnUserChoice":"","sources":[{"title":"","type":"textbook|guideline|review|other","detail":""}],"confidence":"high|medium|low","disclaimer":""}`
 
-function parseBody(body) {
+interface ExplainPayload {
+  section: string
+  questionNumber: number
+  question: string
+  options: Record<string, string>
+  correctAnswer: string
+  selectedAnswer: string
+  type: 'multiple_choice' | 'true_false'
+}
+
+interface VercelRequest {
+  method?: string
+  body?: unknown
+}
+
+interface VercelResponse {
+  setHeader: (name: string, value: string) => void
+  status: (code: number) => {
+    json: (body: unknown) => void
+    end: () => void
+  }
+}
+
+export const config = {
+  maxDuration: 60,
+}
+
+function parseBody(body: unknown): unknown {
   if (body == null) return null
   if (typeof body === 'string') {
     try {
@@ -24,27 +51,36 @@ function parseBody(body) {
   return body
 }
 
-function validatePayload(body) {
+function validatePayload(body: unknown): ExplainPayload {
   if (!body || typeof body !== 'object') throw new Error('Body không hợp lệ')
-  if (typeof body.section !== 'string' || !body.section) throw new Error('Thiếu section')
-  if (typeof body.questionNumber !== 'number') throw new Error('Thiếu questionNumber')
-  if (typeof body.question !== 'string' || !body.question) throw new Error('Thiếu question')
-  if (!body.options || typeof body.options !== 'object') throw new Error('Thiếu options')
-  if (typeof body.correctAnswer !== 'string') throw new Error('Thiếu correctAnswer')
-  if (typeof body.selectedAnswer !== 'string') throw new Error('Thiếu selectedAnswer')
-  if (body.type !== 'multiple_choice' && body.type !== 'true_false') {
+  const b = body as Record<string, unknown>
+  if (typeof b.section !== 'string' || !b.section) throw new Error('Thiếu section')
+  if (typeof b.questionNumber !== 'number') throw new Error('Thiếu questionNumber')
+  if (typeof b.question !== 'string' || !b.question) throw new Error('Thiếu question')
+  if (!b.options || typeof b.options !== 'object') throw new Error('Thiếu options')
+  if (typeof b.correctAnswer !== 'string') throw new Error('Thiếu correctAnswer')
+  if (typeof b.selectedAnswer !== 'string') throw new Error('Thiếu selectedAnswer')
+  if (b.type !== 'multiple_choice' && b.type !== 'true_false') {
     throw new Error('type không hợp lệ')
   }
-  return body
+  return {
+    section: b.section,
+    questionNumber: b.questionNumber,
+    question: b.question,
+    options: b.options as Record<string, string>,
+    correctAnswer: b.correctAnswer,
+    selectedAnswer: b.selectedAnswer,
+    type: b.type,
+  }
 }
 
-function buildUserPrompt(p) {
+function buildUserPrompt(p: ExplainPayload): string {
   const optionsText = Object.entries(p.options)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}. ${v}`)
     .join('\n')
 
-  const label = (key) =>
+  const label = (key: string) =>
     p.type === 'true_false' ? (key === 'A' ? 'Đúng' : 'Sai') : (p.options[key] ?? key)
 
   return `Chuyên mục: ${p.section}
@@ -63,27 +99,31 @@ Học viên ${p.selectedAnswer === p.correctAnswer ? 'TRẢ LỜI ĐÚNG' : 'TR�
 Trả lời JSON theo schema.`
 }
 
-function parseModelJson(content) {
-  let raw
+function parseModelJson(content: string) {
+  let raw: Record<string, unknown>
   try {
-    raw = JSON.parse(content)
+    raw = JSON.parse(content) as Record<string, unknown>
   } catch {
     throw new Error('AI trả về định dạng không hợp lệ')
   }
 
-  const str = (k) => (typeof raw[k] === 'string' ? raw[k] : '')
+  const str = (k: string) => (typeof raw[k] === 'string' ? (raw[k] as string) : '')
   const sources = Array.isArray(raw.sources)
     ? raw.sources
-        .filter((s) => s && typeof s === 'object')
+        .filter((s): s is Record<string, unknown> => s != null && typeof s === 'object')
         .map((s) => ({
           title: typeof s.title === 'string' ? s.title : 'Nguồn tham khảo',
-          type: ['textbook', 'guideline', 'review', 'other'].includes(s.type) ? s.type : 'other',
+          type: ['textbook', 'guideline', 'review', 'other'].includes(String(s.type))
+            ? (s.type as 'textbook' | 'guideline' | 'review' | 'other')
+            : ('other' as const),
           detail: typeof s.detail === 'string' ? s.detail : undefined,
         }))
         .filter((s) => s.title.length > 0)
     : []
 
-  const confidence = ['high', 'medium', 'low'].includes(raw.confidence) ? raw.confidence : 'medium'
+  const confidence = ['high', 'medium', 'low'].includes(String(raw.confidence))
+    ? (raw.confidence as 'high' | 'medium' | 'low')
+    : 'medium'
 
   const result = {
     summary: str('summary') || 'Không có tóm tắt.',
@@ -104,13 +144,12 @@ function parseModelJson(content) {
   return result
 }
 
-async function callDeepSeek(payload, apiKey) {
+async function callDeepSeek(payload: ExplainPayload, apiKey: string) {
   const modelsToTry = [DEEPSEEK_MODEL, 'deepseek-chat']
-
-  let lastError = null
+  let lastError: Error | null = null
 
   for (const model of modelsToTry) {
-    const requestBody = {
+    const requestBody: Record<string, unknown> = {
       model,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -140,7 +179,7 @@ async function callDeepSeek(payload, apiKey) {
       if (res.status === 429) throw new Error('Vượt giới hạn gọi API — thử lại sau')
       let detail = errText.slice(0, 300)
       try {
-        const j = JSON.parse(errText)
+        const j = JSON.parse(errText) as { error?: { message?: string }; message?: string }
         detail = j.error?.message || j.message || detail
       } catch {
         /* keep */
@@ -149,7 +188,9 @@ async function callDeepSeek(payload, apiKey) {
       continue
     }
 
-    const data = await res.json()
+    const data = (await res.json()) as {
+      choices?: { message?: { content?: string } }[]
+    }
     const content = data.choices?.[0]?.message?.content
     if (!content) {
       lastError = new Error('AI không trả về nội dung')
@@ -161,7 +202,7 @@ async function callDeepSeek(payload, apiKey) {
   throw lastError || new Error('Không gọi được DeepSeek API')
 }
 
-async function handler(req, res) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     res.setHeader('Cache-Control', 'no-store')
 
@@ -195,6 +236,3 @@ async function handler(req, res) {
     return res.status(isClient ? 400 : 502).json({ error: message })
   }
 }
-
-module.exports = handler
-module.exports.config = { maxDuration: 60 }

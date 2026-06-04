@@ -1,7 +1,7 @@
 {
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
   "functions": {
-    "api/explain.cjs": {
+    "api/explain.ts": {
       "maxDuration": 60
     }
   }
