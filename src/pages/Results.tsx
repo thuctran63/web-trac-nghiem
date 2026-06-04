@@ -38,18 +38,26 @@ export function Results() {
   }
 
   let verdict = ''
-  if (pct >= 80) verdict = 'Xuất sắc'
-  else if (pct >= 60) verdict = 'Khá tốt'
-  else if (pct >= 40) verdict = 'Cần ôn thêm'
-  else verdict = 'Cần ôn lại kỹ'
+  let verdictClass = 'results-verdict-mid'
+  if (pct >= 80) {
+    verdict = 'Xuất sắc'
+    verdictClass = 'results-verdict-high'
+  } else if (pct >= 60) {
+    verdict = 'Khá tốt'
+    verdictClass = 'results-verdict-good'
+  } else if (pct >= 40) {
+    verdict = 'Cần ôn thêm'
+  } else {
+    verdict = 'Cần ôn lại kỹ'
+    verdictClass = 'results-verdict-low'
+  }
 
   return (
     <div className="results-page">
       <div className="results-card">
+        <span className={`results-verdict ${verdictClass}`}>{verdict}</span>
         <div className="results-score">{pct}%</div>
-        <div className="results-sub">
-          {verdict} &middot; {sectionName}
-        </div>
+        <div className="results-sub">{sectionName}</div>
 
         <div className="results-bar">
           <div className="results-bar-fill" style={{ width: `${pct}%` }} />

@@ -65,9 +65,7 @@ export function Quiz() {
         <div className="question-number">
           Câu hỏi {current.questionNumber}
           {current.section !== sectionName && (
-            <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>
-              {' '}· {current.section}
-            </span>
+            <span className="question-section-tag"> · {current.section}</span>
           )}
         </div>
 
