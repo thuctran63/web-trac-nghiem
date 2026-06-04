@@ -1,10 +1,28 @@
-import type {
-  ExplainPayload,
-  ExplanationResult,
-  ExplanationSource,
-} from '../shared/explanation'
+export interface ExplainPayload {
+  section: string
+  questionNumber: number
+  question: string
+  options: Record<string, string>
+  correctAnswer: string
+  selectedAnswer: string
+  type: 'multiple_choice' | 'true_false'
+}
 
-export type { ExplainPayload, ExplanationResult, ExplanationSource }
+export interface ExplanationSource {
+  title: string
+  type: 'textbook' | 'guideline' | 'review' | 'other'
+  detail?: string
+}
+
+export interface ExplanationResult {
+  summary: string
+  whyCorrect: string
+  whyOthersWrong: string
+  noteOnUserChoice: string
+  sources: ExplanationSource[]
+  confidence: 'high' | 'medium' | 'low'
+  disclaimer: string
+}
 
 const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions'
 
@@ -38,14 +56,14 @@ function buildUserPrompt(p: ExplainPayload): string {
       ? p.selectedAnswer === 'A'
         ? 'Đúng'
         : 'Sai'
-      : p.options[p.selectedAnswer] ?? p.selectedAnswer
+      : (p.options[p.selectedAnswer] ?? p.selectedAnswer)
 
   const correctLabel =
     p.type === 'true_false'
       ? p.correctAnswer === 'A'
         ? 'Đúng'
         : 'Sai'
-      : p.options[p.correctAnswer] ?? p.correctAnswer
+      : (p.options[p.correctAnswer] ?? p.correctAnswer)
 
   return `Chuyên mục: ${p.section}
 Câu ${p.questionNumber} (${p.type === 'true_false' ? 'Đúng/Sai' : 'trắc nghiệm'})
@@ -72,7 +90,7 @@ function parseModelJson(content: string): ExplanationResult {
   }
 
   const o = raw as Record<string, unknown>
-  const str = (k: string) => (typeof o[k] === 'string' ? o[k] : '')
+  const str = (k: string) => (typeof o[k] === 'string' ? (o[k] as string) : '')
   const sources = Array.isArray(o.sources)
     ? o.sources
         .filter((s): s is Record<string, unknown> => s != null && typeof s === 'object')
@@ -139,7 +157,7 @@ export async function generateExplanation(
     const errText = await res.text().catch(() => '')
     if (res.status === 401) throw new Error('API key DeepSeek không hợp lệ')
     if (res.status === 429) throw new Error('Vượt giới hạn gọi API — thử lại sau')
-    throw new Error(errText || `Lỗi DeepSeek (${res.status})`)
+    throw new Error(errText.slice(0, 200) || `Lỗi DeepSeek (${res.status})`)
   }
 
   const data = (await res.json()) as {
@@ -149,6 +167,18 @@ export async function generateExplanation(
   if (!content) throw new Error('AI không trả về nội dung')
 
   return parseModelJson(content)
+}
+
+export function parseRequestBody(body: unknown): unknown {
+  if (body == null) return null
+  if (typeof body === 'string') {
+    try {
+      return JSON.parse(body)
+    } catch {
+      return null
+    }
+  }
+  return body
 }
 
 export function validateExplainPayload(body: unknown): ExplainPayload {

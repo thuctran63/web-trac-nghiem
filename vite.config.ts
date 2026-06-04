@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   generateExplanation,
   validateExplainPayload,
-} from './server/explainHandler'
+} from './lib/explainCore'
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {

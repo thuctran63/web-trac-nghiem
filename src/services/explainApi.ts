@@ -28,7 +28,13 @@ export async function fetchExplanation(
   const data = (await res.json().catch(() => ({}))) as ExplanationResult & { error?: string }
 
   if (!res.ok) {
-    throw new Error(data.error || `Lỗi máy chủ (${res.status})`)
+    const err = data.error || `Lỗi máy chủ (${res.status})`
+    if (res.status >= 500 && err.includes('<!DOCTYPE')) {
+      throw new Error(
+        'API giải thích lỗi server (FUNCTION_INVOCATION_FAILED). Kiểm tra DEEPSEEK_API_KEY trên Vercel và deploy lại.',
+      )
+    }
+    throw new Error(err)
   }
 
   return data
