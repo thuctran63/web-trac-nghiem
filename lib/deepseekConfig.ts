@@ -1,5 +1,9 @@
 export type ReasoningEffort = 'low' | 'medium' | 'high' | 'max'
 
+/** Cố định trong code — không đọc từ env */
+export const DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
+export const DEEPSEEK_MODEL = 'deepseek-v4-flash'
+
 export interface DeepSeekConfig {
   apiKey: string
   baseUrl: string
@@ -7,9 +11,6 @@ export interface DeepSeekConfig {
   thinkingEnabled: boolean
   reasoningEffort: ReasoningEffort
 }
-
-const DEFAULT_BASE_URL = 'https://api.deepseek.com'
-const DEFAULT_MODEL = 'deepseek-v4-flash'
 
 function parseBool(value: string | undefined, defaultValue: boolean): boolean {
   if (value == null || value === '') return defaultValue
@@ -22,7 +23,7 @@ function parseReasoningEffort(value: string | undefined): ReasoningEffort {
   return 'medium'
 }
 
-/** Đọc cấu hình DeepSeek từ biến môi trường (Vercel / .env.local). */
+/** Chỉ API key (và tùy chọn thinking) lấy từ env. */
 export function getDeepSeekConfig(
   env: NodeJS.ProcessEnv | Record<string, string> = process.env,
 ): DeepSeekConfig {
@@ -31,18 +32,6 @@ export function getDeepSeekConfig(
     env.API_KEY?.trim() ||
     ''
 
-  const baseUrl = (
-    env.DEEPSEEK_BASE_URL?.trim() ||
-    env.BASE_URL?.trim() ||
-    DEFAULT_BASE_URL
-  ).replace(/\/$/, '')
-
-  const model =
-    env.DEEPSEEK_MODEL?.trim() ||
-    env.MODEL?.trim() ||
-    DEFAULT_MODEL
-
-  // Giải thích trắc nghiệm cần JSON ổn định → mặc định tắt thinking (nhanh, rẻ hơn)
   const thinkingEnabled = parseBool(
     env.DEEPSEEK_THINKING ?? env.THINKING_ENABLED,
     false,
@@ -52,9 +41,15 @@ export function getDeepSeekConfig(
     env.DEEPSEEK_REASONING_EFFORT ?? env.REASONING_EFFORT,
   )
 
-  return { apiKey, baseUrl, model, thinkingEnabled, reasoningEffort }
+  return {
+    apiKey,
+    baseUrl: DEEPSEEK_BASE_URL,
+    model: DEEPSEEK_MODEL,
+    thinkingEnabled,
+    reasoningEffort,
+  }
 }
 
-export function getChatCompletionsUrl(baseUrl: string): string {
+export function getChatCompletionsUrl(baseUrl: string = DEEPSEEK_BASE_URL): string {
   return `${baseUrl.replace(/\/$/, '')}/chat/completions`
 }
